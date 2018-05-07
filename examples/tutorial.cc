@@ -1,6 +1,7 @@
 #include <sc2api\sc2_api.h>
 
 #include <iostream>
+#include <map>
 
 using namespace sc2;
 
@@ -30,8 +31,9 @@ private:
             }
         }
 
-        if (ability_type_for_structure == ABILITY_ID::BUILD_EXTRACTOR) {
+        if (ability_type_for_structure == ABILITY_ID::BUILD_REFINERY) {
             Point2D pos = FindNearestVespenGas(unit_to_build->pos)->pos;
+            std::cout << "Trying to buid a refinery :" << Observation()->GetMinerals() << " minerals in the bank."<< std::endl;
             Actions()->UnitCommand(unit_to_build,
                 ability_type_for_structure,
                 pos);
@@ -65,7 +67,7 @@ private:
 
     bool TryBuildVespene() {
         const ObservationInterface* observation = Observation();
-        if (scv_occupations.find(ABILITY_ID::BUILD_EXTRACTOR) != scv_occupations.end())
+        if (scv_occupations.find(ABILITY_ID::BUILD_REFINERY) != scv_occupations.end())
             return false;
 
         return TryBuildStructure(ABILITY_ID::BUILD_EXTRACTOR);
@@ -124,6 +126,11 @@ public:
                 }
             }
         }
+        int building_scv = 0;
+        if (scv_occupations.find(ABILITY_ID::BUILD_REFINERY) != scv_occupations.end())
+            std::cout << "Number of SCVs buildinng a refinery : " << scv_occupations[ABILITY_ID::BUILD_REFINERY] << std::endl;
+        if (scv_occupations.find(ABILITY_ID::HARVEST_GATHER_SCV) != scv_occupations.end())
+            std::cout << "Number of SCVs buildinng a refinery : " << scv_occupations[ABILITY_ID::HARVEST_GATHER_SCV] << std::endl;
         TryBuildSupplyDepot();
         TryBuildVespene();
     }
