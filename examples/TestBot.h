@@ -4,12 +4,16 @@
 #include <sc2api\sc2_api.h>
 
 #include "MapAnalyzer.h"
+#include "MacroManager.h"
+#include "Orders.h"
 
 using namespace sc2;
 
 class TestBot :public Agent {
 private:
 	MapAnalyzer map;
+    Orders last_orders;
+    MacroManager manager;
 
 public:
 	virtual void OnGameStart() final;

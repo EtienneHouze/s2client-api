@@ -6,13 +6,14 @@ void TestBot::OnGameStart()
 
 {
 	std::cout << "Hello, World!" << std::endl;
-	map = MapAnalyzer();
-	map.AnalyzeMap(Observation());
+
+    manager = MacroManager();
+    last_orders = manager.ThinkAndSendOrders(Observation());
 }
 
 void TestBot::OnStep()
 {
-	TryBuildSupplyDepot();
+	/*TryBuildSupplyDepot();
 	TryBuildRefinery();
 	TryBuildBarracks();
 	Units units = Observation()->GetUnits();
@@ -24,7 +25,9 @@ void TestBot::OnStep()
 		}
 	}
 	map.PrintDebugInfo(Debug());
-	Debug()->SendDebug();
+	Debug()->SendDebug();*/
+    last_orders = manager.ThinkAndSendOrders(Observation());
+
 }
 
 void TestBot::OnUnitIdle(const Unit * unit)
