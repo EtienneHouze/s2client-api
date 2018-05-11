@@ -5,6 +5,8 @@
 
 Orders::Orders()
 {
+	attack_orders = {};
+	build_orders = {};
 }
 
 

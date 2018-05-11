@@ -6,6 +6,7 @@ void TestBot::OnGameStart()
 
 {
 	std::cout << "Hello, World!" << std::endl;
+    units_being_built = std::map<UNIT_TYPEID, int>();
 
     manager = MacroManager();
     last_orders = manager.ThinkAndSendOrders(Observation());
@@ -58,6 +59,13 @@ void TestBot::OnUnitIdle(const Unit * unit)
 		break;
 	}
 	}
+}
+
+void TestBot::OnUnitVoid(const Unit * unit)
+{
+    if (units_being_built.find(unit->unit_type) != units_being_built.end()) {
+        units_being_built.at(unit->unit_type)--;
+    }
 }
 
 size_t TestBot::CountUnitType(UNIT_TYPEID unit_type)

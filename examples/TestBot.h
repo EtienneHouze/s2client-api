@@ -11,16 +11,29 @@ using namespace sc2;
 
 class TestBot :public Agent {
 private:
+
+	// CONSTANTS
+    float BUILD_TOLERANCE = 5;
+
+
+	// private members
 	MapAnalyzer map;
     Orders last_orders;
     MacroManager manager;
 
+    std::map<UNIT_TYPEID, int> units_being_built;
+
+
+	// Methods
 public:
 	virtual void OnGameStart() final;
 
 	virtual void OnStep() final;
 
 	virtual void OnUnitIdle(const Unit* unit) final;
+
+    virtual void OnUnitVoid(const Unit* unit) final;
+
 private:
 	size_t CountUnitType(UNIT_TYPEID unit_type);
 

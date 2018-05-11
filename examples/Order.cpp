@@ -24,6 +24,7 @@ Order Order::CreateAttackOrder(sc2::Point3D target, int n)
 	Order ret = Order(Order::Type::ATTACK);
 	ret.target = target;
 	ret.number = n;
+	return ret;
 }
 
 Order Order::CreateBuildOrder(sc2::Point3D target, sc2::UNIT_TYPEID what, int n)
