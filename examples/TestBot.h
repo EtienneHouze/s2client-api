@@ -53,6 +53,15 @@ private:
 
 	const Unit* FindNearestVespeneGas(const Point2D& start);
 
+
+    /*
+    Finds and return the nearest Enemy unit.
+    If no enemy is within a certain radius, returns nullptr.
+    */
+    const Unit* FindNearestEnemyUnit(const Point2D& start, float distance = 225);
+
+    bool Attack(Point3D target);
+
 public:
 	TestBot();
 	~TestBot() {}

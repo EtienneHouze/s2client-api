@@ -27,7 +27,10 @@ void TestBot::OnStep()
 	}
 	map.PrintDebugInfo(Debug());
 	Debug()->SendDebug();*/
+
+    // Get orders from high level
     last_orders = manager.ThinkAndSendOrders(Observation());
+    // Do stuff according to the orders
 
 }
 
@@ -47,13 +50,17 @@ void TestBot::OnUnitIdle(const Unit * unit)
 		break;
 	}
 	case UNIT_TYPEID::TERRAN_BARRACKS: {
-		Actions()->UnitCommand(unit, ABILITY_ID::TRAIN_MARINE);
+        if (Observation()->GetMinerals() > 500) {
+		    Actions()->UnitCommand(unit, ABILITY_ID::TRAIN_MARINE);
+        }
 		break;
 	}
 	case UNIT_TYPEID::TERRAN_MARINE: {
-		const GameInfo& game_info = Observation()->GetGameInfo();
-		Actions()->UnitCommand(unit, ABILITY_ID::ATTACK_ATTACK, game_info.enemy_start_locations.front());
-		break;
+		// if an enemy unit is nearby, then we attack it
+        const Unit* unit_to_attack = FindNearestEnemyUnit(unit->pos);
+        if (unit_to_attack != nullptr)
+            Actions()->UnitCommand(unit, ABILITY_ID::ATTACK, unit_to_attack);
+        break;
 	}
 	default: {
 		break;
@@ -79,6 +86,7 @@ bool TestBot::TryBuildStructure(ABILITY_ID ability_type_for_structure, UNIT_TYPE
 
 	// If a unit already is building a supply structure of this type, do nothing.
 	// Also get an scv to build the structure.
+    
 	const Unit* unit_to_build = nullptr;
 	Units units = observation->GetUnits(Unit::Alliance::Self);
 	for (const auto& unit : units) {
@@ -182,7 +190,14 @@ bool TestBot::Expand() {
             break;
         }
     }
-    
+    Point3D target_position = closest_base->position_center;
+    float distance = std::numeric_limits<float>::max();
+    for (int i = -10; i <= 10; i++) {
+        for (int j = -10; j <= 10; j++) {
+            // Check for possible build positions.
+        }
+    }
+
     return false;
 }
 
@@ -224,6 +239,38 @@ const Unit * TestBot::FindNearestVespeneGas(const Point2D & start)
 	return target;
 }
 
+const Unit * TestBot::FindNearestEnemyUnit(const Point2D & start, float distance = 225)
+{
+    const Unit* ret = nullptr;
+    bool is_target_dangerous = false;
+    Units units = Observation()->GetUnits(Unit::Alliance::Enemy);
+    // We find the closest dangerous target.
+    for (const auto& u : units) {
+        if ((u->unit_type != UNIT_TYPEID::TERRAN_SCV && u->unit_type != UNIT_TYPEID::PROTOSS_PROBE && u->unit_type != UNIT_TYPEID::ZERG_DRONE)) {
+            float distance_to_target = DistanceSquared2D(u->pos,start);
+            if (distance_to_target < distance) {
+                distance = distance_to_target;
+                ret = u;
+                is_target_dangerous = true;
+            }
+        }
+        else {
+            if (!is_target_dangerous) {
+                float distance_to_target = DistanceSquared2D(u->pos,start);
+                if (distance_to_target < distance) {
+                    distance = distance_to_target;
+                    ret = u;
+                    is_target_dangerous = true;
+                }
+            }
+        }
+    }
+    return ret;
+}
+
+bool TestBot::Attack(Point3D target) {
+    return false;
+}
 
 
 TestBot::TestBot() {
