@@ -109,6 +109,29 @@ bool TestBot::TryBuildStructure(ABILITY_ID ability_type_for_structure, UNIT_TYPE
 	return true;
 }
 
+bool TestBot::Research(ABILITY_ID ability_for_research, UNIT_TYPEID unit_to_search) {
+    /*
+        Starts a research, return false if it fails,  true if success.
+        :param:
+            ability_for_research : the ability to launch the research
+            unit_to_search: the type of unit to search
+        :return:
+            a boolean.
+    */
+    const Unit* unit  = nullptr;
+    Units units = Observation()->GetUnits();
+    for (const auto& u : units) {
+        if (u->unit_type == unit_to_search)
+            unit = u;
+    }
+    if (unit == nullptr) {
+        std::cerr << "No unit to conduct the research !" << std::endl;
+        return false;
+    }
+    Actions()->UnitCommand(unit, ability_for_research);
+    return true;
+}
+
 bool TestBot::TryBuildSupplyDepot()
 {
 	const ObservationInterface* observation = Observation();
@@ -128,6 +151,39 @@ bool TestBot::TryBuildRefinery()
 	if (number_of_refineries == 0) {
 		return TryBuildStructure(ABILITY_ID::BUILD_REFINERY);
 	}
+}
+
+bool TestBot::TryBuildBarracks()
+{
+	const ObservationInterface* observation = Observation();
+
+	if (CountUnitType(UNIT_TYPEID::TERRAN_SUPPLYDEPOT) < 1) {
+		return false;
+	}
+
+	if (CountUnitType(UNIT_TYPEID::TERRAN_BARRACKS) > 0) {
+		return false;
+	}
+
+	return TryBuildStructure(ABILITY_ID::BUILD_BARRACKS);
+}
+
+bool TestBot::Expand() {
+    /*
+        Build another command center.
+    */
+    BaseDescriptor* closest_base = map.ClosestUnoccupiedBase(Observation()->GetStartLocation());    // Finds the closest unccupied base from the start location.
+    const Unit* scv = nullptr;
+    Units units = Observation()->GetUnits(Unit::Alliance::Self);
+    // Selection of the scv to builf the new base.
+    for (const auto& u : units) {
+        if (u->unit_type == UNIT_TYPEID::TERRAN_SCV) {
+            scv = u;
+            break;
+        }
+    }
+    
+    return false;
 }
 
 const Unit * TestBot::FindNearestMineralPatch(const Point2D & start)
@@ -168,20 +224,6 @@ const Unit * TestBot::FindNearestVespeneGas(const Point2D & start)
 	return target;
 }
 
-bool TestBot::TryBuildBarracks()
-{
-	const ObservationInterface* observation = Observation();
-
-	if (CountUnitType(UNIT_TYPEID::TERRAN_SUPPLYDEPOT) < 1) {
-		return false;
-	}
-
-	if (CountUnitType(UNIT_TYPEID::TERRAN_BARRACKS) > 0) {
-		return false;
-	}
-
-	return TryBuildStructure(ABILITY_ID::BUILD_BARRACKS);
-}
 
 
 TestBot::TestBot() {

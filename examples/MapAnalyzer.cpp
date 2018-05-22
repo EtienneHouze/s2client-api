@@ -63,6 +63,7 @@ void MapAnalyzer::AnalyzeMap(const ObservationInterface* obs)
 	}
 	std::cout << all_vespenes.size() << "   " << all_minerals.size() << std::endl;
 	start_base.iD = 1;
+	start_base.occupation = Unit::Alliance::Self;
 	bases.push_back(start_base);
 
 	int newID = 2;
@@ -112,7 +113,7 @@ void MapAnalyzer::AnalyzeMap(const ObservationInterface* obs)
 			}
 		}
 		
-		
+		newBase.occupation = Unit::Alliance::Self;
 		bases.push_back(newBase);
 		
 	}
@@ -137,6 +138,22 @@ void MapAnalyzer::PrintDebugInfo(DebugInterface* debug)
 	}
 }
 
+
+BaseDescriptor * MapAnalyzer::ClosestUnoccupiedBase(Point3D position)
+{
+	BaseDescriptor* ret = nullptr;
+	float distance = std::numeric_limits<float>::max();
+	for (auto base : bases) {
+		if (base.occupation == Unit::Alliance::Neutral) {
+			float distance_to_base = pow(base.position_center.x - position.x, 2) + pow(base.position_center.y - position.y, 2);
+			if (distance_to_base < distance) {
+				ret = &base;
+				distance = distance_to_base;
+			}
+		}
+	}
+	return ret;
+}
 
 MapAnalyzer::~MapAnalyzer()
 {

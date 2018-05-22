@@ -39,15 +39,20 @@ private:
 
 	bool TryBuildStructure(ABILITY_ID ability_type_for_structure, UNIT_TYPEID unit_type = UNIT_TYPEID::TERRAN_SCV);
 
+    bool Research(ABILITY_ID ability_for_research, UNIT_TYPEID unit_to_search);
+
 	bool TryBuildSupplyDepot();
 
 	bool TryBuildRefinery();
+
+    bool Expand();
+
+	bool TryBuildBarracks();
 
 	const Unit* FindNearestMineralPatch(const Point2D& start);
 
 	const Unit* FindNearestVespeneGas(const Point2D& start);
 
-	bool TryBuildBarracks();
 public:
 	TestBot();
 	~TestBot() {}

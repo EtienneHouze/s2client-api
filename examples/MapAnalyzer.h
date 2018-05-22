@@ -41,6 +41,12 @@ public:
 		return newMap;
 	}
 
+    /*
+        Return a point to the closest base to the given location.
+        If no neutral base exists, returns a null pointer.
+    */
+    BaseDescriptor* ClosestUnoccupiedBase(Point3D position);
+
 	~MapAnalyzer();
 };
 
