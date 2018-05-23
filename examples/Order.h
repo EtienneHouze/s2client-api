@@ -20,6 +20,10 @@ public:
     Order();
     Order(Type t);
 
+	Order(sc2::Point3D tar, sc2::UNIT_TYPEID unitType, int n);
+
+	Order(sc2::Point3D tar, int n);
+
     static Order CreateAttackOrder(sc2::Point3D target, int n);
     static Order CreateBuildOrder(sc2::Point3D target, sc2::UNIT_TYPEID what, int n);
     ~Order();

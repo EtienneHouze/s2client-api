@@ -19,6 +19,19 @@ Order::Order(Type t)
 	number = -1;
 }
 
+Order::Order(sc2::Point3D tar, sc2::UNIT_TYPEID unitType, int n)
+{
+	target = tar;
+	what_to_build = unitType;
+	number = n;
+}
+
+Order::Order(sc2::Point3D tar, int n)
+{
+	target = tar;
+	number = n;
+}
+
 Order Order::CreateAttackOrder(sc2::Point3D target, int n)
 {
 	Order ret = Order(Order::Type::ATTACK);
