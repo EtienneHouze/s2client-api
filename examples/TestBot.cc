@@ -6,8 +6,9 @@ void TestBot::OnGameStart()
 
 {
 	std::cout << "Hello, World!" << std::endl;
-    units_being_built = std::map<UNIT_TYPEID, int>();
-
+    vespene_harvesters = std::map<Tag, int>();
+    map = MapAnalyzer();
+    map.AnalyzeMap(Observation());
     manager = MacroManager();
     last_orders = manager.ThinkAndSendOrders(Observation());
 }
@@ -31,6 +32,16 @@ void TestBot::OnStep()
     // Get orders from high level
     last_orders = manager.ThinkAndSendOrders(Observation());
     // Do stuff according to the orders
+    FollowBuildOrders();
+    FollowAttackOrders();
+    TryBuildSupplyDepot();
+    TryBuildBarracks();
+   /* if (CountUnitType(UNIT_TYPEID::TERRAN_REFINERY) < 1)
+        TryBuildRefinery();*/
+    if (Observation()->GetMinerals() > 400 && CountUnitType(UNIT_TYPEID::TERRAN_COMMANDCENTER) < 2)
+        Expand();
+    map.PrintDebugInfo(Debug());
+    Debug()->SendDebug();
 
 }
 
@@ -38,13 +49,14 @@ void TestBot::OnUnitIdle(const Unit * unit)
 {
 	switch (unit->unit_type.ToType()) {
 	case UNIT_TYPEID::TERRAN_COMMANDCENTER: {
-		Actions()->UnitCommand(unit, ABILITY_ID::TRAIN_SCV);
+        if (unit->assigned_harvesters < 20)
+		    Actions()->UnitCommand(unit, ABILITY_ID::TRAIN_SCV);
 		break;
 	}
 	case UNIT_TYPEID::TERRAN_SCV: {
 		const Unit* mineral_target = FindNearestMineralPatch(unit->pos);
 		if (!mineral_target) {
-			break;
+            return;
 		}
 		Actions()->UnitCommand(unit, ABILITY_ID::SMART, mineral_target);
 		break;
@@ -70,8 +82,85 @@ void TestBot::OnUnitIdle(const Unit * unit)
 
 void TestBot::OnUnitVoid(const Unit * unit)
 {
-    if (units_being_built.find(unit->unit_type) != units_being_built.end()) {
-        units_being_built.at(unit->unit_type)--;
+    
+}
+
+void TestBot::OnUnitCreated(const Unit * unit)
+{
+    switch (unit->unit_type.ToType()) {
+    case UNIT_TYPEID::TERRAN_SCV: {
+        // If the unit is a scv, we need to fin the closest mineral non_saturated mineral field.
+        // We ifrst find the closest non_saturated Command Center.
+        const Unit* cc_to_go = nullptr;
+        float distance = std::numeric_limits<float>::max();
+        std::vector<UNIT_TYPEID> cc_types = { UNIT_TYPEID::TERRAN_COMMANDCENTER,UNIT_TYPEID::TERRAN_ORBITALCOMMAND };
+        Units all_cc = Observation()->GetUnits(Unit::Alliance::Self, IsUnits(cc_types));
+        for (const auto& cc : all_cc) {
+            if (cc->assigned_harvesters < cc->ideal_harvesters) {
+                float distance_to_cc = Distance2D(cc->pos, unit->pos);
+                if (distance_to_cc < distance) {
+                    cc_to_go = cc;
+                    distance = distance_to_cc;
+                }
+            }
+        }
+        if (cc_to_go == nullptr)
+            cc_to_go = unit;
+        const Unit* minerals_to_go = FindNearestMineralPatch(cc_to_go->pos);
+        Actions()->UnitCommand(unit, ABILITY_ID::SMART, minerals_to_go);
+        break;
+        }
+    default:
+        break;
+    }
+}
+
+void TestBot::OnBuildingConstructionComplete(const Unit * unit)
+{
+    switch (unit->unit_type.ToType()) {
+    case UNIT_TYPEID::TERRAN_COMMANDCENTER: {       // When a new cc is built, we check if other CCs are overcrowded. If yes, move SCVs.
+        BaseDescriptor corresponding_base = map.ClosestUnoccupiedBase(unit->pos);
+        corresponding_base.occupation = Unit::Alliance::Self;
+        const Unit* closest_mineral = FindNearestMineralPatch(unit->pos);
+        Units all_scv = Observation()->GetUnits(Unit::Alliance::Self, IsUnit(UNIT_TYPEID::TERRAN_SCV));
+        for (const auto& scv : all_scv) {
+            const Unit* closest_cc = FindNearestUnit(scv->pos, { UNIT_TYPEID::TERRAN_COMMANDCENTER,UNIT_TYPEID::TERRAN_ORBITALCOMMAND },Unit::Alliance::Self);
+            if (closest_cc->assigned_harvesters > closest_cc->ideal_harvesters) {
+
+            }
+               // Actions()->UnitCommand(scv, ABILITY_ID::SMART, closest_mineral);
+        }
+        break;
+        }
+    case UNIT_TYPEID::TERRAN_REFINERY: {        // When a refinery is built, we take 3 random workers to harvest gas.
+        Units all_scv = Observation()->GetUnits(Unit::Alliance::Self, IsUnit(UNIT_TYPEID::TERRAN_SCV));
+        int count = 0;
+        std::cout << "Refinerey Complete" << std::endl;
+        for (const auto* scv : all_scv) {
+            if (count >= 3)
+                break;
+            std::vector<UnitOrder> scv_orders = scv->orders;
+            bool harvest = true;
+            for (auto o : scv_orders) {
+                if (o.ability_id == ABILITY_ID::HARVEST_GATHER_SCV
+                    || o.ability_id == ABILITY_ID::HARVEST_GATHER
+                    || o.ability_id == ABILITY_ID::HARVEST_RETURN_SCV
+                    || o.ability_id == ABILITY_ID::HARVEST_RETURN)
+                    harvest = true;
+            }
+            if (harvest) {
+                Actions()->UnitCommand(scv, ABILITY_ID::SMART, unit);
+                vespene_harvesters.emplace(scv->tag, 1);
+                count++;
+            }
+        }
+        for (std::map<Tag, int>::iterator it = vespene_harvesters.begin(); it != vespene_harvesters.end(); it++) {
+            std::cout << it->first << std::endl;
+        }
+        break;
+        }
+    default:
+        break;
     }
 }
 
@@ -180,9 +269,9 @@ bool TestBot::Expand() {
     /*
         Build another command center.
     */
-    BaseDescriptor* closest_base = map.ClosestUnoccupiedBase(Observation()->GetStartLocation());    // Finds the closest unccupied base from the start location.
+    BaseDescriptor closest_base = map.ClosestUnoccupiedBase(Observation()->GetStartLocation());    // Finds the closest unccupied base from the start location.
     const Unit* scv = nullptr;
-    Units units = Observation()->GetUnits(Unit::Alliance::Self);
+    Units units = Observation()->GetUnits(Unit::Alliance::Self,IsUnit(UNIT_TYPEID::TERRAN_SCV));
     // Selection of the scv to builf the new base.
     for (const auto& u : units) {
         if (u->unit_type == UNIT_TYPEID::TERRAN_SCV) {
@@ -190,14 +279,30 @@ bool TestBot::Expand() {
             break;
         }
     }
-    Point3D target_position = closest_base->position_center;
+    int minerals_begin = Observation()->GetMinerals();
+    std::cout << "scv_chosen" << std::endl;
+    Point3D target_position = closest_base.position_center;
+    Point3D actual_target = target_position;
+    float x, y;
+    x = closest_base.position_center.x;
+    y = closest_base.position_center.y;
+    std::cout << "Closest base : " << closest_base.iD << " " << x << " " << y << std::endl;
+    const ObservationInterface* obs = Observation();
     float distance = std::numeric_limits<float>::max();
     for (int i = -10; i <= 10; i++) {
         for (int j = -10; j <= 10; j++) {
             // Check for possible build positions.
+            actual_target = Point3D(x + i, y + j, target_position.z);
+            Debug()->DebugBoxOut(actual_target - Point3D(1, 1, 1), actual_target + Point3D(1, 1, 1));
+    //        std::cout << actual_target.x << " " << actual_target.y << std::endl;
+            Actions()->UnitCommand(scv, ABILITY_ID::BUILD_COMMANDCENTER, actual_target);
         }
     }
-
+    if (Observation()->GetMinerals() < minerals_begin - 200) {  // We check if the cc is being built.
+        map.bases[closest_base.iD].occupation = Unit::Alliance::Self;
+        return true;
+    }
+        
     return false;
 }
 
@@ -239,7 +344,64 @@ const Unit * TestBot::FindNearestVespeneGas(const Point2D & start)
 	return target;
 }
 
-const Unit * TestBot::FindNearestEnemyUnit(const Point2D & start, float distance = 225)
+const Unit * TestBot::FindNearestUnit(const Point2D & start, UNIT_TYPEID unit_type, Unit::Alliance all)
+{
+    Units all_units = Observation()->GetUnits(all, IsUnit(unit_type));
+    float distance = std::numeric_limits<float>::max();
+    const Unit* ret = nullptr;
+    for (const auto u : all_units) {
+        float distance_to_u = Distance2D(start, u->pos);
+        if (distance_to_u < distance) {
+            ret = u;
+            distance = distance_to_u;
+        }
+    }
+    return ret;
+}
+
+const Unit * TestBot::FindNearestUnit(const Point2D & start, std::vector<UNIT_TYPEID> unit_type, Unit::Alliance all)
+{
+    Units all_units = Observation()->GetUnits(all, IsUnits(unit_type));
+    float distance = std::numeric_limits<float>::max();
+    const Unit* ret = nullptr;
+    for (const auto u : all_units) {
+        float distance_to_u = Distance2D(start, u->pos);
+        if (distance_to_u < distance) {
+            ret = u;
+            distance = distance_to_u;
+        }
+    }
+    return ret;
+}
+
+//std::list<const Unit *> TestBot::FindNearestUnits(const Point2D & start, std::vector<UNIT_TYPEID> unit_type, Unit::Alliance all, int number)
+//{
+//    std::list<const Unit*> ret = {};
+//    Units all_units = Observation()->GetUnits(all, IsUnits(unit_type));
+//    for (const auto& u : all_units) {
+//        if (ret.size() < number) {
+//            if (ret.size() == 0)
+//                ret.push_back(u);
+//            else {
+//                auto it = ret.begin();
+//                while (it != ret.end()) {
+//                    if (Distance2D((*it)->pos, start) > Distance2D(u->pos, start)) {
+//                        ret.insert(it, u);
+//                        break;
+//                    }
+//                    it++;
+//                }
+//                if (it == ret.end())
+//                    ret.emplace_back(it,u);
+//            }
+//            
+//
+//        }
+//    }
+//    return ret;
+//}
+
+const Unit * TestBot::FindNearestEnemyUnit(const Point2D & start, float distance)
 {
     const Unit* ret = nullptr;
     bool is_target_dangerous = false;
@@ -268,8 +430,58 @@ const Unit * TestBot::FindNearestEnemyUnit(const Point2D & start, float distance
     return ret;
 }
 
-bool TestBot::Attack(Point3D target) {
-    return false;
+bool TestBot::FollowAttackOrders() {
+    Units all_marines = Observation()->GetUnits(Unit::Alliance::Self, IsUnit(UNIT_TYPEID::TERRAN_MARINE));
+    for (auto order : last_orders.GetAttackOrders()) {
+        if (order.number < all_marines.size())
+            return false;
+        int count = 0;
+        for (const auto& marine : all_marines) {
+            if (count < order.number)
+                Actions()->UnitCommand(marine, ABILITY_ID::ATTACK_ATTACK, order.target);
+            count++;
+        }
+    }
+    return true;
+}
+
+bool TestBot::FollowBuildOrders() {
+    for (auto order : last_orders.GetBuildOrders()) {
+        switch (order.what_to_build)
+        {
+        case UNIT_TYPEID::TERRAN_SCV: {
+            Units all_units = Observation()->GetUnits(Unit::Alliance::Self);
+            for (int count = order.number; count >= 0; count--) {       // Looping through command centers to build SCVs.
+                for (const auto& cc : all_units) {
+                    if (cc->unit_type == UNIT_TYPEID::TERRAN_COMMANDCENTER
+                        || cc->unit_type == UNIT_TYPEID::TERRAN_ORBITALCOMMAND) {
+                        if (count >= 0) {
+                            Actions()->UnitCommand(cc, ABILITY_ID::TRAIN_SCV);
+                            count--;
+                        }
+                    }
+                }
+            }
+            break;
+        }
+
+        case UNIT_TYPEID::TERRAN_MARINE: {
+            Units all_units = Observation()->GetUnits(Unit::Alliance::Self,IsUnit(UNIT_TYPEID::TERRAN_BARRACKS));
+            for (int count = order.number; count >= 0; count--) {       // Looping through command barracks to build marines.
+                for (const auto& racks : all_units) {
+                    if (count >= 0) {
+                        Actions()->UnitCommand(racks, ABILITY_ID::TRAIN_MARINE);
+                        count--;
+                    }
+                }
+            }
+            break;
+        }
+        default:
+            break;
+        }
+    }
+    return true;
 }
 
 

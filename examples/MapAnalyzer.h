@@ -21,7 +21,9 @@ class MapAnalyzer
 	const Point3D tens = Point3D(10, 10, 10);
 	const Point3D ones = Point3D(1, 1, 1);
 	// ===============================================
-    friend class Agent;						
+    friend class Agent;
+
+public:
 	std::vector<BaseDescriptor> bases;		// A vector of all the bases on the map.
 	
 
@@ -45,7 +47,7 @@ public:
         Return a point to the closest base to the given location.
         If no neutral base exists, returns a null pointer.
     */
-    BaseDescriptor* ClosestUnoccupiedBase(Point3D position);
+    BaseDescriptor ClosestUnoccupiedBase(Point3D position);
 
 	~MapAnalyzer();
 };
