@@ -11,6 +11,16 @@ void TestBot::OnGameStart()
     map.AnalyzeMap(Observation());
     manager = MacroManager();
     last_orders = manager.ThinkAndSendOrders(Observation());
+    where_to = Point3D(Observation()->GetGameInfo().enemy_start_locations[0].x,
+        Observation()->GetGameInfo().enemy_start_locations[0].y,
+        Observation()->GetStartLocation().z);
+    float rx = GetRandomScalar();
+    float ry = GetRandomScalar();
+    rally_point = Point3D(
+        Observation()->GetStartLocation().x + 15.f * rx,
+        Observation()->GetStartLocation().y + 15.f* ry,
+        Observation()->GetStartLocation().z);
+    Actions()->SendChat("EZ game, EZ life");
 }
 
 void TestBot::OnStep()
@@ -38,8 +48,10 @@ void TestBot::OnStep()
     TryBuildBarracks();
    /* if (CountUnitType(UNIT_TYPEID::TERRAN_REFINERY) < 1)
         TryBuildRefinery();*/
-    if (Observation()->GetMinerals() > 400 && CountUnitType(UNIT_TYPEID::TERRAN_COMMANDCENTER) < 2)
+    if (Observation()->GetMinerals() > 400)
         Expand();
+    if (CountUnitType(UNIT_TYPEID::TERRAN_MARINE) > 20)
+        is_attack_over = false;
     map.PrintDebugInfo(Debug());
     Debug()->SendDebug();
 
@@ -62,7 +74,7 @@ void TestBot::OnUnitIdle(const Unit * unit)
 		break;
 	}
 	case UNIT_TYPEID::TERRAN_BARRACKS: {
-        if (Observation()->GetMinerals() > 500) {
+        if (true) {
 		    Actions()->UnitCommand(unit, ABILITY_ID::TRAIN_MARINE);
         }
 		break;
@@ -70,8 +82,12 @@ void TestBot::OnUnitIdle(const Unit * unit)
 	case UNIT_TYPEID::TERRAN_MARINE: {
 		// if an enemy unit is nearby, then we attack it
         const Unit* unit_to_attack = FindNearestEnemyUnit(unit->pos);
-        if (unit_to_attack != nullptr)
+        if (unit_to_attack != nullptr) {
+            if (Distance2D(unit_to_attack->pos,unit->pos) < 15)
             Actions()->UnitCommand(unit, ABILITY_ID::ATTACK, unit_to_attack);
+        }
+        if (is_attack_over)
+            Actions()->UnitCommand(unit, ABILITY_ID::SMART, rally_point);
         break;
 	}
 	default: {
@@ -180,7 +196,7 @@ bool TestBot::TryBuildStructure(ABILITY_ID ability_type_for_structure, UNIT_TYPE
 	Units units = observation->GetUnits(Unit::Alliance::Self);
 	for (const auto& unit : units) {
 		for (const auto& order : unit->orders) {
-			if (order.ability_id == ability_type_for_structure) {
+			if (order.ability_id == ability_type_for_structure && observation->GetMinerals() < 200) {
 				return false;
 			}
 		}
@@ -258,7 +274,7 @@ bool TestBot::TryBuildBarracks()
 		return false;
 	}
 
-	if (CountUnitType(UNIT_TYPEID::TERRAN_BARRACKS) > 0) {
+	if (CountUnitType(UNIT_TYPEID::TERRAN_BARRACKS) > 4* CountUnitType(UNIT_TYPEID::TERRAN_COMMANDCENTER)) {
 		return false;
 	}
 
@@ -374,32 +390,6 @@ const Unit * TestBot::FindNearestUnit(const Point2D & start, std::vector<UNIT_TY
     return ret;
 }
 
-//std::list<const Unit *> TestBot::FindNearestUnits(const Point2D & start, std::vector<UNIT_TYPEID> unit_type, Unit::Alliance all, int number)
-//{
-//    std::list<const Unit*> ret = {};
-//    Units all_units = Observation()->GetUnits(all, IsUnits(unit_type));
-//    for (const auto& u : all_units) {
-//        if (ret.size() < number) {
-//            if (ret.size() == 0)
-//                ret.push_back(u);
-//            else {
-//                auto it = ret.begin();
-//                while (it != ret.end()) {
-//                    if (Distance2D((*it)->pos, start) > Distance2D(u->pos, start)) {
-//                        ret.insert(it, u);
-//                        break;
-//                    }
-//                    it++;
-//                }
-//                if (it == ret.end())
-//                    ret.emplace_back(it,u);
-//            }
-//            
-//
-//        }
-//    }
-//    return ret;
-//}
 
 const Unit * TestBot::FindNearestEnemyUnit(const Point2D & start, float distance)
 {
@@ -408,7 +398,7 @@ const Unit * TestBot::FindNearestEnemyUnit(const Point2D & start, float distance
     Units units = Observation()->GetUnits(Unit::Alliance::Enemy);
     // We find the closest dangerous target.
     for (const auto& u : units) {
-        if ((u->unit_type != UNIT_TYPEID::TERRAN_SCV && u->unit_type != UNIT_TYPEID::PROTOSS_PROBE && u->unit_type != UNIT_TYPEID::ZERG_DRONE)) {
+        if (/*(u->unit_type != UNIT_TYPEID::TERRAN_SCV && u->unit_type != UNIT_TYPEID::PROTOSS_PROBE && u->unit_type != UNIT_TYPEID::ZERG_DRONE)*/true) {
             float distance_to_target = DistanceSquared2D(u->pos,start);
             if (distance_to_target < distance) {
                 distance = distance_to_target;
@@ -430,17 +420,101 @@ const Unit * TestBot::FindNearestEnemyUnit(const Point2D & start, float distance
     return ret;
 }
 
+float TestBot::DistanceToClosestEnemyUnit(const Point2D& start) {
+    Units all_enemies = Observation()->GetUnits(Unit::Alliance::Enemy);
+    float distance = std::numeric_limits<float>::max();
+    for (const auto& u : all_enemies) {
+        if (Distance2D(start, u->pos) < distance)
+            distance = Distance2D(start, u->pos);
+    }
+    return distance;
+}
+
+int TestBot::NumberOfUnitsNearby(Unit::Alliance alliance, const Point2D & start, float default_distance)
+{
+    Units nearby = Observation()->GetUnits(alliance, IsCloser(start, default_distance));
+    return nearby.size();
+}
+
 bool TestBot::FollowAttackOrders() {
     Units all_marines = Observation()->GetUnits(Unit::Alliance::Self, IsUnit(UNIT_TYPEID::TERRAN_MARINE));
-    for (auto order : last_orders.GetAttackOrders()) {
-        if (order.number < all_marines.size())
-            return false;
-        int count = 0;
-        for (const auto& marine : all_marines) {
-            if (count < order.number)
-                Actions()->UnitCommand(marine, ABILITY_ID::ATTACK_ATTACK, order.target);
-            count++;
+    std::vector<UNIT_TYPEID> high_prio = {
+      UNIT_TYPEID::PROTOSS_STALKER,
+      UNIT_TYPEID::PROTOSS_ZEALOT,
+      UNIT_TYPEID::PROTOSS_SENTRY,
+      UNIT_TYPEID::PROTOSS_ADEPT,
+      UNIT_TYPEID::ZERG_ZERGLING,
+      UNIT_TYPEID::ZERG_ROACH,
+      UNIT_TYPEID::ZERG_QUEEN,
+      UNIT_TYPEID::ZERG_RAVAGER,
+      UNIT_TYPEID::ZERG_MUTALISK,
+      UNIT_TYPEID::TERRAN_MARINE,
+      UNIT_TYPEID::TERRAN_MARAUDER,
+      UNIT_TYPEID::TERRAN_HELLION
+    };
+    std::vector<UNIT_TYPEID> medium_prio = {
+        UNIT_TYPEID::PROTOSS_PROBE,
+        UNIT_TYPEID::TERRAN_SCV,
+        UNIT_TYPEID::ZERG_DRONE
+    };
+    if (!is_attack_over) {
+        // check if the attack is over
+        int number_of_units_near_target = NumberOfUnitsNearby(Unit::Alliance::Enemy, where_to); // number of enemies near the target
+        int number_of_allies_near_target = NumberOfUnitsNearby(Unit::Alliance::Self, where_to);
+        if (number_of_allies_near_target > 0 && number_of_units_near_target < 1) {
+            is_attack_over = true;
+            return true;
         }
+        // Now, mmanage the units
+        for (const auto& marine : all_marines) {
+            int current_hp = marine->health;
+            const Unit* closest_enemy = FindNearestEnemyUnit(marine->pos);
+            const Unit* closest_dangerous_high = FindNearestUnit(marine->pos, high_prio, Unit::Alliance::Enemy);
+            const Unit* closest_dangerous_med = FindNearestUnit(marine->pos, medium_prio, Unit::Alliance::Enemy);
+            if (closest_enemy == nullptr) {
+                int marines_nearby = Observation()->GetUnits(Unit::Alliance::Self, IsUnit(UNIT_TYPEID::TERRAN_MARINE)).size();
+                if (marines_nearby < 10) {
+                    Actions()->UnitCommand(marine, ABILITY_ID::SMART, rally_point);
+                }
+                else {
+                    Actions()->UnitCommand(marine, ABILITY_ID::SMART, where_to);
+                }
+            }
+            else {
+                if (closest_dangerous_med != nullptr) {
+                    if (Distance2D(closest_dangerous_med->pos, marine->pos) < 10)
+                        closest_enemy = closest_dangerous_med;
+                }
+                if (closest_dangerous_high != nullptr) {
+                    if (Distance2D(closest_dangerous_high->pos, marine->pos) < 8)
+                        closest_enemy = closest_dangerous_high;
+                }
+                if (current_hp < 10 /*&& Distance2D(marine->pos, closest_enemy->pos) > 4*/ && Distance2D(marine->pos, closest_enemy->pos) < 3) {
+                    // If we are low health, we move to the back
+                    Point3D t = marine->pos + marine->pos - closest_enemy->pos;
+                    Actions()->UnitCommand(marine, ABILITY_ID::SMART, t); // We move to t
+                    Debug()->DebugSphereOut(t, 0.5f, Colors::Green);
+                }
+                else {
+                    if (Distance2D(closest_enemy->pos, marine->pos) < 10) {
+                        Actions()->UnitCommand(marine, ABILITY_ID::SMART, closest_enemy);
+                        Debug()->DebugSphereOut(closest_enemy->pos, 0.5f, Colors::Red);
+                    }
+                    else {      // Not really so much enemies nearby
+                        int marines_nearby = Observation()->GetUnits(Unit::Alliance::Self, IsUnit(UNIT_TYPEID::TERRAN_MARINE)).size();
+                        if (marines_nearby < 10) {
+                            Actions()->UnitCommand(marine, ABILITY_ID::SMART, rally_point);
+                        }
+                        else {
+                            Actions()->UnitCommand(marine, ABILITY_ID::SMART, where_to);
+                        }
+                    }
+                }
+            }
+
+        }
+
+
     }
     return true;
 }
@@ -476,6 +550,18 @@ bool TestBot::FollowBuildOrders() {
                 }
             }
             break;
+        }
+
+        case UNIT_TYPEID::TERRAN_SUPPLYDEPOT: {
+            TryBuildSupplyDepot();
+            break;
+        }
+        case UNIT_TYPEID::TERRAN_BARRACKS: {
+            TryBuildBarracks();
+            break;
+        }
+        case UNIT_TYPEID::TERRAN_COMMANDCENTER: {
+            Expand();
         }
         default:
             break;

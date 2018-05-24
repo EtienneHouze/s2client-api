@@ -14,9 +14,9 @@ int main(int argc, char* argv[]) {
     TestBot bot;
     coordinator.SetParticipants({
         CreateParticipant(Race::Terran, &bot),
-        CreateComputer(Race::Zerg)
+        CreateComputer(Race::Zerg,Difficulty::Hard)
         });
-
+    coordinator.SetRealtime(false);
     coordinator.LaunchStarcraft();
     coordinator.StartGame(sc2::kMapBelShirVestigeLE);
 
